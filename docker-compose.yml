@@ -1,0 +1,16 @@
+services:
+  chat-app:
+    image: chat-messaging-app:dev
+    container_name: chat_messaging_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:3002:3000"
+    networks:
+      - dbms_default
+
+networks:
+  dbms_default:
+    external: true
+    name: dbms_default

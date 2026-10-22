@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat Messaging System</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f1f5f9;
+      color: #172033;
+    }
+    main {
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 20px;
+    }
+    h1 { margin-top: 0; }
+    .panel {
+      background: white;
+      padding: 18px;
+      margin-bottom: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px #0000000d;
+    }
+    input, button {
+      padding: 10px 12px;
+      margin: 4px 2px;
+      border-radius: 7px;
+      border: 1px solid #cbd5e1;
+      font: inherit;
+    }
+    button { cursor: pointer; background: #e2e8f0; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .primary { background: #2563eb; color: white; border: 0; }
+    #messages {
+      height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+    .message { padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+    .meta { color: #64748b; font-size: .85rem; }
+    #status { color: #475569; }
+    #roomList button { margin: 4px; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .row input { flex: 1; min-width: 160px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Chat Messaging System</h1>
+  <p id="status" role="status">Đang khởi tạo...</p>
+
+  <section class="panel">
+    <h2>1. Người dùng</h2>
+    <form id="userForm" class="row">
+      <input id="username" placeholder="Tên đăng nhập (3-32 ký tự)" required
+             minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+">
+      <input id="displayName" placeholder="Tên hiển thị" required maxlength="80">
+      <button class="primary">Đăng ký / Cập nhật</button>
+    </form>
+    <p id="currentUser">Chưa chọn người dùng.</p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Phòng chat</h2>
+    <form id="roomForm" class="row">
+      <input id="roomName" placeholder="Tên phòng mới" required maxlength="80">
+      <button class="primary">Tạo phòng</button>
+    </form>
+    <div id="roomList"></div>
+  </section>
+
+  <section class="panel">
+    <h2 id="chatTitle">3. Tin nhắn</h2>
+    <div id="messages" aria-live="polite"></div>
+    <form id="messageForm" class="row">
+      <input id="messageInput" placeholder="Nhập tin nhắn..." required maxlength="2000">
+      <button class="primary" id="sendButton" disabled>Gửi</button>
+    </form>
+  </section>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const status = $('status');
+  const socket = io();
+  let currentUser = null;
+  let currentRoom = null;
+
+  function setStatus(message) {
+    status.textContent = message;
+  }
+
+  async function api(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers }
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Yêu cầu thất bại');
+    return data;
+  }
+
+  function renderMessage(message) {
+    const item = document.createElement('div');
+    item.className = 'message';
+
+    const author = document.createElement('strong');
+    author.textContent = message.display_name || message.username || 'Người dùng';
+
+    const body = document.createElement('div');
+    body.textContent = message.content;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = new Date(message.created_at).toLocaleString('vi-VN');
+
+    item.append(author, body, meta);
+    $('messages').appendChild(item);
+    $('messages').scrollTop = $('messages').scrollHeight;
+  }
+
+  async function loadRooms() {
+    const data = await api('/api/rooms');
+    const list = $('roomList');
+    list.replaceChildren();
+
+    if (!data.rooms.length) {
+      list.textContent = 'Chưa có phòng chat.';
+      return;
+    }
+
+    for (const room of data.rooms) {
+      const button = document.createElement('button');
+      button.textContent = `${room.name} (${room.member_count} thành viên)`;
+      button.addEventListener('click', () => joinRoom(room));
+      list.appendChild(button);
+    }
+  }
+
+  async function joinRoom(room) {
+    if (!currentUser) {
+      setStatus('Hãy đăng ký hoặc chọn người dùng trước.');
+      return;
+    }
+
+    try {
+      await api(`/api/rooms/${room.id}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: currentUser.id })
+      });
+
+      currentRoom = room;
+      $('chatTitle').textContent = `3. Tin nhắn — ${room.name}`;
+      $('messages').replaceChildren();
+      $('sendButton').disabled = false;
+
+      const data = await api(
+        `/api/rooms/${room.id}/messages?userId=${currentUser.id}`
+      );
+      data.messages.forEach(renderMessage);
+
+      socket.emit('room:join', {
+        roomId: room.id,
+        userId: currentUser.id
+      }, (result) => {
+        if (!result?.ok) {
+          setStatus(result?.error || 'Không thể kết nối phòng chat.');
+          return;
+        }
+        setStatus(`Đã tham gia phòng: ${room.name}`);
+      });
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  socket.on('connect', () => setStatus('Đã kết nối máy chủ chat.'));
+  socket.on('disconnect', () => setStatus('Mất kết nối, đang thử kết nối lại...'));
+
+  socket.on('message:new', (message) => {
+    if (currentRoom && Number(message.room_id) === Number(currentRoom.id)) {
+      renderMessage(message);
+    }
+  });
+
+  $('userForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const data = await api('/api/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: $('username').value,
+          displayName: $('displayName').value
+        })
+      });
+      currentUser = data.user;
+      $('currentUser').textContent =
+        `Người dùng hiện tại: ${currentUser.display_name} (@${currentUser.username})`;
+      setStatus('Đã lưu thông tin người dùng.');
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
+  $('roomForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!currentUser) {
+      setStatus('Hãy đăng ký hoặc chọn người dùng trước.');
+      return;
+    }
+
+    try {
+      const data = await api('/api/rooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: $('roomName').value,
+          userId: currentUser.id
+        })
+      });
+      $('roomName').value = '';
+      await loadRooms();
+      await joinRoom(data.room);
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
+  $('messageForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!currentUser || !currentRoom) return;
+
+    const input = $('messageInput');
+    const content = input.value.trim();
+    if (!content) return;
+
+    try {
+      await api(`/api/rooms/${currentRoom.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: currentUser.id, content })
+      });
+      input.value = '';
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
+  loadRooms().catch((error) => setStatus(error.message));
+
+  api('/healthz')
+    .then(() => setStatus('Máy chủ và PostgreSQL hoạt động bình thường.'))
+    .catch(() => setStatus('Chưa kết nối được máy chủ hoặc PostgreSQL.'));
+})();
+</script>
+</body>
+</html>
