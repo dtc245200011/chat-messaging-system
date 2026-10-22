@@ -1,0 +1,35 @@
+services:
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: postgres_db:5432/chat_messaging?sslmode=disable
+      DATA_SOURCE_USER: chat_metrics_exporter
+      DATA_SOURCE_PASS_FILE: /run/secrets/postgres_exporter_password
+    volumes:
+      - /etc/prometheus-secrets/chat_metrics_exporter_password:/run/secrets/postgres_exporter_password:ro
+    networks:
+      - monitoring
+      - dbms_default
+
+  blackbox-exporter:
+    image: quay.io/prometheus/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true
+    name: wordpress-monitoring_monitoring
+  dbms_default:
+    external: true
+    name: dbms_default

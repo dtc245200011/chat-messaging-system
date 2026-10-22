@@ -87,3 +87,32 @@ Kiểm tra và nạp cấu hình Nginx:
 Kiểm tra endpoint:
 
     curl http://chat.local/healthz
+
+## Monitoring — Prometheus và Grafana
+
+Hệ thống monitoring hiện tại sử dụng Prometheus, Grafana,
+PostgreSQL Exporter, Blackbox Exporter, Node Exporter và cAdvisor.
+
+Các file cấu hình được lưu trong repository:
+
+- `config/monitoring/prometheus.yml`
+- `config/monitoring/blackbox/blackbox.yml`
+- `config/monitoring/exporters.compose.yml`
+- `dashboards/chat-messaging-system-monitoring.json`
+
+Dashboard Grafana: `Chat Messaging System - Monitoring`.
+
+Các truy vấn kiểm tra chính:
+
+    pg_up{job="postgres-exporter"}
+
+    probe_success{job="blackbox-chat"}
+
+Trạng thái kỳ vọng: `pg_up = 1`, `probe_success = 1`.
+Website chat được kiểm tra qua Nginx với HTTP 200.
+
+Lưu ý: môi trường lab hiện tại đang quản lý các dịch vụ monitoring
+từ thư mục `~/wordpress-monitoring`. Các file trong repository
+lưu cấu hình và dashboard liên quan đến Chat Messaging System.
+Khi triển khai trên máy khác, cần cấu hình lại network, secret,
+địa chỉ upstream và các dịch vụ phụ thuộc cho phù hợp.
