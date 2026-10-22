@@ -61,3 +61,29 @@ Mở giao diện:
 khi bổ sung cơ chế xác thực, phân quyền và bảo vệ phù hợp.
 
 Không đưa file `.env` hoặc mật khẩu thực vào Git.
+
+## Nginx Reverse Proxy
+
+Nginx chuyển tiếp yêu cầu từ tên miền nội bộ `chat.local`
+đến ứng dụng chat tại `http://127.0.0.1:3002`.
+
+Địa chỉ truy cập qua Nginx:
+
+    http://chat.local
+
+Cấu hình Nginx được lưu tại:
+
+    config/nginx/chat-messaging.conf
+
+Cấu hình hiện hỗ trợ Socket.IO polling/WebSocket upgrade và
+các security headers cơ bản. Máy Ubuntu cần có ánh xạ tên miền
+`chat.local` về `127.0.0.1` trong `/etc/hosts`.
+
+Kiểm tra và nạp cấu hình Nginx:
+
+    sudo nginx -t
+    sudo systemctl reload nginx
+
+Kiểm tra endpoint:
+
+    curl http://chat.local/healthz

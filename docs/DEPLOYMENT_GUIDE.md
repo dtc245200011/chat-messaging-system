@@ -84,3 +84,51 @@ trên Internet trước khi bổ sung xác thực, phân quyền và các
 biện pháp bảo vệ phù hợp.
 
 Ứng dụng hiện được ánh xạ cổng 3002 trên địa chỉ 127.0.0.1.
+
+## 8. Nginx Reverse Proxy — Commit 1
+
+### Cấu hình
+
+File cấu hình được quản lý cùng mã nguồn tại:
+
+    config/nginx/chat-messaging.conf
+
+Cấu hình sử dụng `server_name chat.local` và chuyển tiếp yêu cầu
+đến ứng dụng đang lắng nghe tại `127.0.0.1:3002`.
+
+### Triển khai trên máy Ubuntu
+
+Sao chép cấu hình vào thư mục quản lý Nginx:
+
+    sudo cp config/nginx/chat-messaging.conf /etc/nginx/sites-available/chat-messaging
+
+Nếu site chưa được kích hoạt, tạo liên kết:
+
+    sudo ln -s /etc/nginx/sites-available/chat-messaging /etc/nginx/sites-enabled/chat-messaging
+
+Kiểm tra cú pháp và nạp lại Nginx:
+
+    sudo nginx -t
+    sudo systemctl reload nginx
+
+Đảm bảo `/etc/hosts` có dòng:
+
+    127.0.0.1 chat.local
+
+Truy cập ứng dụng:
+
+    http://chat.local
+
+### Kiểm thử đã thực hiện
+
+- Endpoint `/healthz` trả về HTTP 200 và database báo `ok`.
+- Giao diện HTML được phục vụ qua Nginx.
+- Socket.IO polling handshake thành công qua Nginx.
+- Chat thời gian thực được kiểm tra qua hai cửa sổ trình duyệt
+  sử dụng địa chỉ `http://chat.local`.
+
+### Lưu ý
+
+Cấu hình này dùng HTTP nội bộ và security headers cơ bản;
+chưa cấu hình HTTPS. Khi triển khai ở môi trường khác, cần điều
+chỉnh tên miền, địa chỉ upstream và cấu hình Nginx tương ứng.
