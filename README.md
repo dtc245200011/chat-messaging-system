@@ -116,3 +116,28 @@ từ thư mục `~/wordpress-monitoring`. Các file trong repository
 lưu cấu hình và dashboard liên quan đến Chat Messaging System.
 Khi triển khai trên máy khác, cần cấu hình lại network, secret,
 địa chỉ upstream và các dịch vụ phụ thuộc cho phù hợp.
+
+## Logging — Loki, Promtail and LogQL
+
+The project uses Loki and Promtail to collect and query Docker container logs.
+
+- Loki readiness endpoint: `http://127.0.0.1:3100/ready`
+- Loki configuration: `config/monitoring/loki-config.yml`
+- Promtail configuration: `config/monitoring/promtail-config.yml`
+- Logging Compose reference: `config/monitoring/logging.compose.yml`
+- LogQL query examples: `docs/LOGQL_QUERIES.md`
+- Logging evidence: `docs/evidence/15_grafana_logql_error_filter_pass.png`
+
+The active Loki and Promtail services are managed by the existing stack in
+`~/wordpress-monitoring/docker-compose.yml`. The Compose file in this repository
+is a reference for the existing external network and volumes. Validate it with
+`docker compose -f config/monitoring/logging.compose.yml config -q`.
+Do not run `up` on the reference file while the original logging stack is active.
+
+Three LogQL queries have been tested in Grafana Explore to find the chat
+application startup log, health-check failures, and error-related keywords.
+The number of matching log lines can change over time.
+
+The observed message `Health check failed: Connection terminated due to
+connection timeout` requires separate investigation. It does not by itself
+indicate that Loki or Promtail has failed.

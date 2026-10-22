@@ -214,3 +214,71 @@ sau đó chọn file JSON và datasource Prometheus phù hợp.
 Cần cấu hình các Docker network, file secret PostgreSQL exporter,
 địa chỉ Nginx và đường dẫn volume trên máy đích trước khi triển khai.
 Không đưa mật khẩu thật hoặc file `.env` vào Git.
+
+## Loki and Promtail — centralized Docker logs
+
+### Current deployment
+
+Loki and Promtail run as part of the existing Compose stack at
+`~/wordpress-monitoring/docker-compose.yml`.
+
+The project repository contains copies of the active configuration:
+
+- `config/monitoring/loki-config.yml`
+- `config/monitoring/promtail-config.yml`
+- `config/monitoring/logging.compose.yml`
+
+The Loki and Promtail YAML files were compared with their active source files.
+Both passed YAML parsing and matched the source configurations.
+
+### Verify the services
+
+Check container status:
+
+    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'loki|promtail'
+
+Check Loki readiness:
+
+    curl -i http://127.0.0.1:3100/ready
+
+A successful readiness check returns HTTP 200 and the body `ready`.
+
+Validate the repository's reference Compose configuration:
+
+    cd ~/chat-messaging-system
+    docker compose -f config/monitoring/logging.compose.yml config -q
+
+The reference Compose file uses the existing external network
+`wordpress-monitoring_monitoring` and existing external volumes. Do not start
+a second copy while the services in `~/wordpress-monitoring` are running:
+both stacks would contend for Loki's host port 3100 and share the same data
+resources.
+
+### Test LogQL in Grafana Explore
+
+Open Grafana Explore and select the Loki data source. Obtain the current
+application container ID:
+
+    docker inspect --format '{{.Id}}' chat_messaging_app
+
+Replace `CHAT_CONTAINER_ID` in the following queries with that ID.
+
+Find the application startup log:
+
+    {job="docker", filename=~".*CHAT_CONTAINER_ID.*"} |= "Chat server listening on port 3000"
+
+Find application health-check failures:
+
+    {job="docker", filename=~".*CHAT_CONTAINER_ID.*"} |= "Health check failed"
+
+Find error-related keywords:
+
+    {job="docker", filename=~".*CHAT_CONTAINER_ID.*"} |~ "(?i)(error|failed|exception)"
+
+These three queries were tested against the current chat container. The startup
+query returned one matching line; the health-check and keyword queries each
+returned six lines at the time of testing. Counts can change as new logs arrive.
+
+The observed health-check timeout messages need separate investigation.
+Do not treat the presence of those messages as proof of a Loki or Promtail
+failure. See `docs/LOGQL_QUERIES.md` for the query notes and current limitations.

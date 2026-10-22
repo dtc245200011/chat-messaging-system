@@ -1,0 +1,43 @@
+# Loki + Promtail logging configuration.
+# Uses the existing wordpress-monitoring network and volumes.
+# Validate this file before deploying it alongside the existing stack.
+
+services:
+  loki:
+    image: grafana/loki:latest
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    command:
+      - -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail_positions:/tmp
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    external: true
+    name: wordpress-monitoring_monitoring
+
+volumes:
+  loki_data:
+    external: true
+    name: wordpress-monitoring_loki_data
+
+  promtail_positions:
+    external: true
+    name: wordpress-monitoring_promtail_positions
